@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fooocus Interface</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+    function updateLabel(inputId) {
+        const input = document.getElementById(inputId);
+        const label = document.getElementById(inputId + '-label');
+        const defaultText = inputId === 'model' ? 
+            'Model<br><span>Drag & drop or choose file</span>' : 
+            `${inputId.charAt(0).toUpperCase() + inputId.slice(1)} Cloth<br><span>Drag & drop or choose file</span>`;
+        
+        label.innerHTML = input.files.length ? input.files[0].name : defaultText;
+    }
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight(e) {
+        e.currentTarget.classList.add('highlight');
+    }
+
+    function unhighlight(e) {
+        e.currentTarget.classList.remove('highlight');
+    }
+
+    function handleDrop(e, inputId) {
+        const dt = e.dataTransfer;
+        const input = document.getElementById(inputId);
+        if (dt.files && dt.files.length > 0) {
+            // Assign the dropped FileList directly for maximum compatibility
+            input.files = dt.files;
+            updateLabel(inputId);
+            // Trigger change event for backend compatibility
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function setupDropArea(areaId, inputId) {
+        const area = document.getElementById(areaId);
+        const input = document.getElementById(inputId);
+        const label = document.getElementById(inputId + '-label');
+
+        // Make the label clickable to open the file dialog
+        label.addEventListener('click', (e) => {
+            input.value = '';
+            input.click();
+        });
+
+        // Handle drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            area.addEventListener(eventName, preventDefaults, false);
+        });
+        ['dragenter', 'dragover'].forEach(eventName => {
+            area.addEventListener(eventName, highlight, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            area.addEventListener(eventName, unhighlight, false);
+        });
+        area.addEventListener('drop', (e) => {
+            preventDefaults(e);
+            handleDrop(e, inputId);
+        }, false);
+        // Handle file input change
+        input.addEventListener('change', () => updateLabel(inputId));
+    }
+
+    // Prevent form submission if model file input is empty
+    window.onload = function() {
+        setupDropArea('upper-drop', 'upper');
+        setupDropArea('lower-drop', 'lower');
+        setupDropArea('model-drop', 'model');
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const model = document.getElementById('model');
+            if (!model.files.length) {
+                alert('Please select a model image.');
+                e.preventDefault();
+            }
+        });
+    }
+    </script>
+    <style>
+    /* Loading overlay styles */
+    #loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(255,255,255,0.8);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+    .spinner {
+        border: 8px solid #f3f3f3;
+        border-top: 8px solid #3498db;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+    <div class="blue-strip top-strip">
+        <div class="hexagon"></div>
+        <div class="hexagon"></div>
+        <div class="hexagon"></div>
+    </div>
+    <div class="container">
+        <h1>Fooocus Virtual Try-On</h1>
+        <form id="tryon-form" method="POST" action="{{ url_for('process') }}" enctype="multipart/form-data">
+            <div class="input-row">
+                <div class="drop-area" id="upper-drop">
+                    <input type="file" id="upper" name="upper" accept="image/*" style="display:none">
+                    <label id="upper-label" for="upper" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
+                        Upper Cloth<br><span>Drag & drop or choose file</span>
+                    </label>
+                </div>
+                <div class="drop-area" id="lower-drop">
+                    <input type="file" id="lower" name="lower" accept="image/*" style="display:none">
+                    <label id="lower-label" for="lower" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
+                        Lower Cloth<br><span>Drag & drop or choose file</span>
+                    </label>
+                </div>
+                <div class="drop-area" id="model-drop">
+                    <input type="file" id="model" name="model" accept="image/*" required style="display:none">
+                    <label id="model-label" for="model" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
+                        Model<br><span>Drag & drop or choose file</span>
+                    </label>
+                </div>
+            </div>
+            <button type="submit" class="submit-btn">Try On</button>
+        </form>
+        {% if result_url %}
+        <div class="result">
+            <h2>Result</h2>
+            <img src="{{ result_url }}" alt="Result Image" class="result-img">
+        </div>
+        {% endif %}
+    </div>
+    <div class="blue-strip bottom-strip">
+        <div class="hexagon"></div>
+        <div class="hexagon"></div>
+        <div class="hexagon"></div>
+    </div>
+    <script>
+    // Animate hexagons
+    document.querySelectorAll('.hexagon').forEach(function(hex, i) {
+        hex.style.animationDelay = (i * 0.5) + 's';
+    });
+
+    // AJAX form submission with loading overlay
+    document.getElementById('tryon-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const overlay = document.getElementById('loading-overlay');
+        overlay.style.display = 'flex';
+        const formData = new FormData(form);
+        fetch(form.action, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(html => {
+            overlay.style.display = 'none';
+            // Replace the container with the new HTML (result)
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newContainer = doc.querySelector('.container');
+            document.querySelector('.container').replaceWith(newContainer);
+        })
+        .catch(err => {
+            overlay.style.display = 'none';
+            alert('An error occurred while processing.');
+        });
+    });
+    </script>
+</body>
+</html>
