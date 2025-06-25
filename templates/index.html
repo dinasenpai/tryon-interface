@@ -1,189 +1,423 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Fooocus Interface</title>
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
-    <script>
-    function updateLabel(inputId) {
-        const input = document.getElementById(inputId);
-        const label = document.getElementById(inputId + '-label');
-        const defaultText = inputId === 'model' ? 
-            'Model<br><span>Drag & drop or choose file</span>' : 
-            `${inputId.charAt(0).toUpperCase() + inputId.slice(1)} Cloth<br><span>Drag & drop or choose file</span>`;
-        
-        label.innerHTML = input.files.length ? input.files[0].name : defaultText;
+<html><head>
+<meta charset="utf-8"/>
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900&amp;family=Space+Grotesk%3Awght%40400%3B500%3B700" onload="this.rel='stylesheet'" rel="stylesheet"/>
+<title>Virtual Try-On</title>
+<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style type="text/tailwindcss">
+    :root {
+      --primary-color: #3d98f4;
+      --secondary-color: #101a23;
+      --accent-color: #223649;
+      --text-primary: #ffffff;
+      --text-secondary: #b0c7de;
+      --border-color: #223649;
     }
-
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
+    .preset-image-container {
+      @apply relative cursor-pointer transition-all duration-200 ease-in-out;
     }
-
-    function highlight(e) {
-        e.currentTarget.classList.add('highlight');
+    .preset-image-container:hover .preset-image-overlay {
+      @apply opacity-70;
     }
-
-    function unhighlight(e) {
-        e.currentTarget.classList.remove('highlight');
+    .preset-image-container.selected .preset-image-overlay {
+      @apply opacity-100;
     }
-
-    function handleDrop(e, inputId) {
-        const dt = e.dataTransfer;
-        const input = document.getElementById(inputId);
-        if (dt.files && dt.files.length > 0) {
-            // Assign the dropped FileList directly for maximum compatibility
-            input.files = dt.files;
-            updateLabel(inputId);
-            // Trigger change event for backend compatibility
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+    .preset-image-container.selected {
+      @apply ring-2 ring-[var(--primary-color)] ring-offset-2 ring-offset-[var(--secondary-color)] rounded-lg;
     }
-
-    function setupDropArea(areaId, inputId) {
-        const area = document.getElementById(areaId);
-        const input = document.getElementById(inputId);
-        const label = document.getElementById(inputId + '-label');
-
-        // Make the label clickable to open the file dialog
-        label.addEventListener('click', (e) => {
-            input.value = '';
-            input.click();
-        });
-
-        // Handle drag and drop events
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            area.addEventListener(eventName, preventDefaults, false);
-        });
-        ['dragenter', 'dragover'].forEach(eventName => {
-            area.addEventListener(eventName, highlight, false);
-        });
-        ['dragleave', 'drop'].forEach(eventName => {
-            area.addEventListener(eventName, unhighlight, false);
-        });
-        area.addEventListener('drop', (e) => {
-            preventDefaults(e);
-            handleDrop(e, inputId);
-        }, false);
-        // Handle file input change
-        input.addEventListener('change', () => updateLabel(inputId));
+    .preset-image-overlay {
+      @apply absolute inset-0 bg-[var(--primary-color)] opacity-0 rounded-lg flex items-center justify-center transition-opacity duration-200 ease-in-out;
     }
-
-    // Prevent form submission if model file input is empty
-    window.onload = function() {
-        setupDropArea('upper-drop', 'upper');
-        setupDropArea('lower-drop', 'lower');
-        setupDropArea('model-drop', 'model');
-        document.querySelector('form').addEventListener('submit', function(e) {
-            const model = document.getElementById('model');
-            if (!model.files.length) {
-                alert('Please select a model image.');
-                e.preventDefault();
-            }
-        });
+    .preset-image-check {
+      @apply text-white opacity-0;
     }
-    </script>
-    <style>
-    /* Loading overlay styles */
-    #loading-overlay {
-        display: none;
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(255,255,255,0.8);
-        z-index: 9999;
-        align-items: center;
-        justify-content: center;
+    .preset-image-container.selected .preset-image-check {
+      @apply opacity-100;
     }
-    .spinner {
-        border: 8px solid #f3f3f3;
-        border-top: 8px solid #3498db;
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    </style>
+  </style>
 </head>
-<body>
-    <div id="loading-overlay">
-        <div class="spinner"></div>
-    </div>
-    <div class="blue-strip top-strip">
-        <div class="hexagon"></div>
-        <div class="hexagon"></div>
-        <div class="hexagon"></div>
-    </div>
-    <div class="container">
-        <h1>Fooocus Virtual Try-On</h1>
-        <form id="tryon-form" method="POST" action="{{ url_for('process') }}" enctype="multipart/form-data">
-            <div class="input-row">
-                <div class="drop-area" id="upper-drop">
-                    <input type="file" id="upper" name="upper" accept="image/*" style="display:none">
-                    <label id="upper-label" for="upper" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
-                        Upper Cloth<br><span>Drag & drop or choose file</span>
-                    </label>
-                </div>
-                <div class="drop-area" id="lower-drop">
-                    <input type="file" id="lower" name="lower" accept="image/*" style="display:none">
-                    <label id="lower-label" for="lower" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
-                        Lower Cloth<br><span>Drag & drop or choose file</span>
-                    </label>
-                </div>
-                <div class="drop-area" id="model-drop">
-                    <input type="file" id="model" name="model" accept="image/*" required style="display:none">
-                    <label id="model-label" for="model" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
-                        Model<br><span>Drag & drop or choose file</span>
-                    </label>
-                </div>
-            </div>
-            <button type="submit" class="submit-btn">Try On</button>
-        </form>
-        {% if result_url %}
-        <div class="result">
-            <h2>Result</h2>
-            <img src="{{ result_url }}" alt="Result Image" class="result-img">
-        </div>
-        {% endif %}
-    </div>
-    <div class="blue-strip bottom-strip">
-        <div class="hexagon"></div>
-        <div class="hexagon"></div>
-        <div class="hexagon"></div>
-    </div>
-    <script>
-    // Animate hexagons
-    document.querySelectorAll('.hexagon').forEach(function(hex, i) {
-        hex.style.animationDelay = (i * 0.5) + 's';
-    });
+<body class="bg-[var(--secondary-color)]" style='font-family: "Space Grotesk", "Noto Sans", sans-serif;'>
+<div class="relative flex size-full min-h-screen flex-col dark group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-[var(--border-color)] px-6 md:px-10 py-4">
+<div class="flex items-center gap-3 text-[var(--text-primary)]">
+<div class="size-6 text-[var(--primary-color)]">
+<svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h2 class="text-[var(--text-primary)] text-xl font-bold leading-tight tracking-[-0.015em]">Virtual Try-On</h2>
+</div>
+<div class="flex items-center gap-4">
+<button aria-label="Help" class="flex items-center justify-center rounded-lg h-10 w-10 bg-[var(--accent-color)] hover:bg-opacity-80 text-[var(--text-primary)] transition-colors">
+<svg fill="currentColor" height="20px" viewBox="0 0 256 256" width="20px" xmlns="http://www.w3.org/2000/svg">
+<path d="M140,180a12,12,0,1,1-12-12A12,12,0,0,1,140,180ZM128,72c-22.06,0-40,16.15-40,36v4a8,8,0,0,0,16,0v-4c0-11,10.77-20,24-20s24,9,24,20-10.77,20-24,20a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-.72c18.24-3.35,32-17.9,32-35.28C168,88.15,150.06,72,128,72Zm104,56A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"></path>
+</svg>
+</button>
+</div>
+</header>
+<main class="flex flex-1 justify-center py-8 px-4 sm:px-6 md:px-10">
+<form class="layout-content-container flex flex-col w-full max-w-4xl" id="tryOnForm">
+<div class="flex flex-wrap justify-between items-center gap-4 p-4 mb-6">
+<h1 class="text-[var(--text-primary)] tracking-tight text-4xl font-bold">Create Your Look</h1>
+</div>
+<section class="mb-10" id="upper-apparel-section">
+<h2 class="text-[var(--text-primary)] text-2xl font-bold leading-tight tracking-tight px-4 pb-4 pt-2 border-b border-[var(--border-color)] mb-6">Select Upper Apparel</h2>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuBx82BHVXhPAHQQdyw2Iew9IXEfObYCWWAuhQED-3Q4-fuUb9RasxNjmzplwOsz8xSOlzo0kcUEIqgG3mfIbg-CLBXusDmEIJbXiuB6hIOZHy9_9wCXRfu56_Z6Yn7U7_rfoaWCP1ENBHgp_UU01fxj2Is4ZoBFobwxcPsjRbDOvxx9xOgLg1tDbeBKzxf5y6UaNCh9-KImDpEFEwLaL3gNaNEmk8Tzo21ywtSVDDD56TvPkF_BsNvZFKUnnxKyKEvCqXIK7M-QqQ0">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBx82BHVXhPAHQQdyw2Iew9IXEfObYCWWAuhQED-3Q4-fuUb9RasxNjmzplwOsz8xSOlzo0kcUEIqgG3mfIbg-CLBXusDmEIJbXiuB6hIOZHy9_9wCXRfu56_Z6Yn7U7_rfoaWCP1ENBHgp_UU01fxj2Is4ZoBFobwxcPsjRbDOvxx9xOgLg1tDbeBKzxf5y6UaNCh9-KImDpEFEwLaL3gNaNEmk8Tzo21ywtSVDDD56TvPkF_BsNvZFKUnnxKyKEvCqXIK7M-QqQ0");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuAmeeD1NrG8f7swhtskq4msRuHGTg0na4V4-fsIebap8pVjhIoNrhaUWXBTlEJfnruk5o9Sckc01UM0OmujBGN8TVL_d2eZGJq95gZwbNq8AE4DU4xAyaVE8c7n_ys9UemZMThDfKaeBYfxDTUwWAFE_bUm_qLv8lTrNEnCJ7IMfZ9Z1bJSiFEH-ZMQMAfMku9-BHB2aNUF6s_I-JGS9H1yO9mipJOzaGJBvVMLENiUg3DCYu0kWRSmQjGWR_vAWYB8ljRd2FCgDWI">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAmeeD1NrG8f7swhtskq4msRuHGTg0na4V4-fsIebap8pVjhIoNrhaUWXBTlEJfnruk5o9Sckc01UM0OmujBGN8TVL_d2eZGJq95gZwbNq8AE4DU4xAyaVE8c7n_ys9UemZMThDfKaeBYfxDTUwWAFE_bUm_qLv8lTrNEnCJ7IMfZ9Z1bJSiFEH-ZMQMAfMku9-BHB2aNUF6s_I-JGS9H1yO9mipJOzaGJBvVMLENiUg3DCYu0kWRSmQjGWR_vAWYB8ljRd2FCgDWI");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuBo0dz0F2Sne74JRODHDIGtyG-O4s7l15ZmRwWVO3kkWtnW4v9FyST5g8y3u_ypdxVa4LInN72ZgOLaJcZiZLww4n6Iw0gOSoBfjwWelJ1idoW1hep0TQQCP25Z-1FKH9otxwAJcGc3m7M5rsT5_5hYGzi1H2b7sdxQiVuwavSI6db_TxFYqSB00GqskSQKGmaiES1vRdyF0WuaFZqkGs4M8kaPqtpNhrTyCCqNAVKWzRQiXe8cPR-TLA0mU9V5eNW8Qe-OalIDyOs">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBo0dz0F2Sne74JRODHDIGtyG-O4s7l15ZmRwWVO3kkWtnW4v9FyST5g8y3u_ypdxVa4LInN72ZgOLaJcZiZLww4n6Iw0gOSoBfjwWelJ1idoW1hep0TQQCP25Z-1FKH9otxwAJcGc3m7M5rsT5_5hYGzi1H2b7sdxQiVuwavSI6db_TxFYqSB00GqskSQKGmaiES1vRdyF0WuaFZqkGs4M8kaPqtpNhrTyCCqNAVKWzRQiXe8cPR-TLA0mU9V5eNW8Qe-OalIDyOs");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuBBVrYllZCNs2wLDk_qA74sYX3DOygUuUzdy78wRJwdY3rvq1V-Rfn4t5SdA7Ds7hz1DHk9WiG2l_0IEb1HP2WdjlLMARp2UDUl4ItIF4vNdCaNrJ5ePCHxo1zDPje70X2aQGwzjGYfpnMn1xE42iWzs4qmGx0pxtp8OH_8DfqS_ZH_O9CQvTQqpkNXVyQNVdgonmRX9bJItK1GdAJkCk7b9GOgtHxy720NWRV63TTinLUyGYZZipxj-pzzev8-9NREA6oifouCtIQ">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBBVrYllZCNs2wLDk_qA74sYX3DOygUuUzdy78wRJwdY3rvq1V-Rfn4t5SdA7Ds7hz1DHk9WiG2l_0IEb1HP2WdjlLMARp2UDUl4ItIF4vNdCaNrJ5ePCHxo1zDPje70X2aQGwzjGYfpnMn1xE42iWzs4qmGx0pxtp8OH_8DfqS_ZH_O9CQvTQqpkNXVyQNVdgonmRX9bJItK1GdAJkCk7b9GOgtHxy720NWRV63TTinLUyGYZZipxj-pzzev8-9NREA6oifouCtIQ");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuCUlciTXmgwBTPlTdTtL2PnEiiQT_Jp9ocDf7uZrFFzLcWUUlBDKP7MJugWzKyxHobv6S6EmcXXiRpt4Wend_X14TFV6kDm8cAG2UqJ2CGg-9Ah6n_3FJv2-SxbUTKmanum6nlPOe1o0l0Ceo1-MbodK0nKS04RSq5F2UioNjhq8i3DP2ZqWNgClHs6VBPkZ8PozC2zOese5E20niHUe4UGtZLwyESnISB3MCaIGH7RhMM8eoYVmBlYWRjfIYJjafPvc9ZY4ZNPSlo">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCUlciTXmgwBTPlTdTtL2PnEiiQT_Jp9ocDf7uZrFFzLcWUUlBDKP7MJugWzKyxHobv6S6EmcXXiRpt4Wend_X14TFV6kDm8cAG2UqJ2CGg-9Ah6n_3FJv2-SxbUTKmanum6nlPOe1o0l0Ceo1-MbodK0nKS04RSq5F2UioNjhq8i3DP2ZqWNgClHs6VBPkZ8PozC2zOese5E20niHUe4UGtZLwyESnISB3MCaIGH7RhMM8eoYVmBlYWRjfIYJjafPvc9ZY4ZNPSlo");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuCAoIAzyvOj1SiQEh-DNp5GzN7K02_yDEkgNeeET3czPsGSZHLDlc_bMhDh0RHg7HnBS67qeJbxYdm-Awq0J9g42Dqq3Gm3ECrP5bbgOgq4-3Gl8sXiiEqEC0Euf52gIEXrgKIm_9W48zwrIjt-vCKt4gciQet7ZDYRaq8bAx9QzAVd6Q6jsKHZFe5bAgnORZggMy1IsQQ_QzVzsI0ZOyqCOK5Jw7-Tkb81K6D8J5sMqQGh3dKV5YFWoguiglMpu5WHrRok0TJc6Vk">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCAoIAzyvOj1SiQEh-DNp5GzN7K02_yDEkgNeeET3czPsGSZHLDlc_bMhDh0RHg7HnBS67qeJbxYdm-Awq0J9g42Dqq3Gm3ECrP5bbgOgq4-3Gl8sXiiEqEC0Euf52gIEXrgKIm_9W48zwrIjt-vCKt4gciQet7ZDYRaq8bAx9QzAVd6Q6jsKHZFe5bAgnORZggMy1IsQQ_QzVzsI0ZOyqCOK5Jw7-Tkb81K6D8J5sMqQGh3dKV5YFWoguiglMpu5WHrRok0TJc6Vk");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuATVpj8SmMHW46iNXMIVuivPUmraU90_SGJnOkcAuxj5Ll_zslg6hL1SnBAuo_DvDTv527xn6hrJZvgMu8CdFj7HNSK8uDULLZYAh-B2czx9hxTMnqY-5rVJBGcZ5MvN0DesonI0oE-Ptc5PSCJf1x3b-fxhQ8vSi_iITnH4Vjd7vzW7Wup5jh5_xGAQz2Yt8z-hXdDQFIotbRQPJwle2Sj5wYj6N-CCVlzZJ1Q4_QAlLU2yQBgF4C3fCIbz5Q5FLY8L0jiV559UwI">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuATVpj8SmMHW46iNXMIVuivPUmraU90_SGJnOkcAuxj5Ll_zslg6hL1SnBAuo_DvDTv527xn6hrJZvgMu8CdFj7HNSK8uDULLZYAh-B2czx9hxTMnqY-5rVJBGcZ5MvN0DesonI0oE-Ptc5PSCJf1x3b-fxhQ8vSi_iITnH4Vjd7vzW7Wup5jh5_xGAQz2Yt8z-hXdDQFIotbRQPJwle2Sj5wYj6N-CCVlzZJ1Q4_QAlLU2yQBgF4C3fCIbz5Q5FLY8L0jiV559UwI");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuD5G0NVjWEe7E9ruTgvzSqiMU-7T_D8nSgL6AhC-eH38QYUByTKpqey7p6_x7P2ERG6X8pa_ZQD_iD3gkWPKThVbC2JAP-bKNFbo_aRGVfjFzKdFsduLq7-c4AMXHU8KfkvdAdvAUQJdxtqlsIcdRdNmf0z1vMvoUQg4x7EMGOekJk-V1_Z8TJ3ss1072RZHqOK6jxvfHVrz1rxnzh5yqBF-ZkCDuRYIyhpomr_KcBAfTGu8cNMb2H2IbQDS5YTFhrdKOsGn3BkWfU">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD5G0NVjWEe7E9ruTgvzSqiMU-7T_D8nSgL6AhC-eH38QYUByTKpqey7p6_x7P2ERG6X8pa_ZQD_iD3gkWPKThVbC2JAP-bKNFbo_aRGVfjFzKdFsduLq7-c4AMXHU8KfkvdAdvAUQJdxtqlsIcdRdNmf0z1vMvoUQg4x7EMGOekJk-V1_Z8TJ3ss1072RZHqOK6jxvfHVrz1rxnzh5yqBF-ZkCDuRYIyhpomr_KcBAfTGu8cNMb2H2IbQDS5YTFhrdKOsGn3BkWfU");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuAKQKxjZ8E4t2v6LSLxI73gzUdaqS4cXIz8S0vaNclV_mCuki_oOZA7buDJW886BxXfKOatH-yANCHoYUBTIFTQrbgMcSpUoB06Bn7R1durs07CuPG-GsB_Hl1aAiTjDqZEMJxb-5ijt9UNOr5ruQEgeGt1odjnv11OJuYLjanuSFpA9SwCqR6BBU5DhcU9zgYDof6f2k392Pn0WcH4vKPR2LVC9c9s0mje2UMgPHfEwj9iq1EFuilpWufy9aOoHfpRGXQhmzJH574">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAKQKxjZ8E4t2v6LSLxI73gzUdaqS4cXIz8S0vaNclV_mCuki_oOZA7buDJW886BxXfKOatH-yANCHoYUBTIFTQrbgMcSpUoB06Bn7R1durs07CuPG-GsB_Hl1aAiTjDqZEMJxb-5ijt9UNOr5ruQEgeGt1odjnv11OJuYLjanuSFpA9SwCqR6BBU5DhcU9zgYDof6f2k392Pn0WcH4vKPR2LVC9c9s0mje2UMgPHfEwj9iq1EFuilpWufy9aOoHfpRGXQhmzJH574");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuC8M6Bg3TGClmyFnOWLxoeiigK-llBPoBVNQaivlzsmEQBFPcGWBKonwtSfqbt7YLpgetUeCcKqyKRAlvkb3Wy3NdwjTC_qXEIT7veghZ2kgaTerUHgS6FgwJlpzdllbUeIUZWwd9N3lQCpeGrWzZuUoPZSzAQVtJ8zh4QJ2wQrD1EjvNt90fs9znbW5OoR1dIQF5kCxofagKT5soIu7lwFLLc8uM30EuDitWkEPG0LpFQsoM6G4id1WldzzMHrgfHy7lXOU139oQI">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC8M6Bg3TGClmyFnOWLxoeiigK-llBPoBVNQaivlzsmEQBFPcGWBKonwtSfqbt7YLpgetUeCcKqyKRAlvkb3Wy3NdwjTC_qXEIT7veghZ2kgaTerUHgS6FgwJlpzdllbUeIUZWwd9N3lQCpeGrWzZuUoPZSzAQVtJ8zh4QJ2wQrD1EjvNt90fs9znbW5OoR1dIQF5kCxofagKT5soIu7lwFLLc8uM30EuDitWkEPG0LpFQsoM6G4id1WldzzMHrgfHy7lXOU139oQI");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuDdjEUiJQFx-pSEC9ij6HgG36LbUXz8FFbqCoXZGUkdcFTbh4N5gaySzxCrmSkpV9wVh1510M6cBwo5OnT066woRa3DEWkFr-pjhOTeSzt4RA1Oct0H2eUBUHVd5fc0JzGwzJ2jWLmohqC_SU2ZERWl1zmqdFa068qfrobignTXaGPWRQ4wDdupMj4wBZawHoDiXM-MzBkssPWFBxPGWP946I0yFSfOq8TUnp429UG0Cbtz9Iimb7elYtqPJxwuGDkDWAZx0468lHk">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDdjEUiJQFx-pSEC9ij6HgG36LbUXz8FFbqCoXZGUkdcFTbh4N5gaySzxCrmSkpV9wVh1510M6cBwo5OnT066woRa3DEWkFr-pjhOTeSzt4RA1Oct0H2eUBUHVd5fc0JzGwzJ2jWLmohqC_SU2ZERWl1zmqdFa068qfrobignTXaGPWRQ4wDdupMj4wBZawHoDiXM-MzBkssPWFBxPGWP946I0yFSfOq8TUnp429UG0Cbtz9Iimb7elYtqPJxwuGDkDWAZx0468lHk");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuBBRxPkWnoLIgHKWzMBoamhYsjVbPEd7cfAXOihAoOZh5eJtXaU2R8dN1qyLNcS65Hkbu9w8KsUjYdYcX4bgJYlJ87ancIHLjzvINzescXLzC8L5CTq_Jn0m9bGxtOamD6zmHnz8GX6bcuELeNto5W6yLhHM5EpUCc1HlzAAqs5JC4fdsETCGtaG1io5LhWK_2_VLWE21GBrXkVSPTAcvrv14qX2b2iNdca2Mawrh3F3eqQeBno2eJfUk6DOZtlxYJmcO7FgPrcaG4">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBBRxPkWnoLIgHKWzMBoamhYsjVbPEd7cfAXOihAoOZh5eJtXaU2R8dN1qyLNcS65Hkbu9w8KsUjYdYcX4bgJYlJ87ancIHLjzvINzescXLzC8L5CTq_Jn0m9bGxtOamD6zmHnz8GX6bcuELeNto5W6yLhHM5EpUCc1HlzAAqs5JC4fdsETCGtaG1io5LhWK_2_VLWE21GBrXkVSPTAcvrv14qX2b2iNdca2Mawrh3F3eqQeBno2eJfUk6DOZtlxYJmcO7FgPrcaG4");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuCM5RBbasdgCzNoEAX6cJaYvAZMCN885f4E-urvdQUjYzFZ5rv9OuU7jxH_rFwR4ZcBlSLbXvRPakvJFYH17XScPEyPzRUOTADKYDJQsTzEQZ4MHfWlTI-Y5Tkfc9boXNzQV6hBqfM2_AtYXClXgCBWqIu1z80jrxKI2U7HRwMtu7gqpbE8mQ8XdZfowQdk9QBFlmMvoyjmHjT1hTV7aqZkQjgzaVjB5ac67LO5I3EFVvvOmJQ6whiU2fIeE1M3i2TJQ823RNe1wX0">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCM5RBbasdgCzNoEAX6cJaYvAZMCN885f4E-urvdQUjYzFZ5rv9OuU7jxH_rFwR4ZcBlSLbXvRPakvJFYH17XScPEyPzRUOTADKYDJQsTzEQZ4MHfWlTI-Y5Tkfc9boXNzQV6hBqfM2_AtYXClXgCBWqIu1z80jrxKI2U7HRwMtu7gqpbE8mQ8XdZfowQdk9QBFlmMvoyjmHjT1hTV7aqZkQjgzaVjB5ac67LO5I3EFVvvOmJQ6whiU2fIeE1M3i2TJQ823RNe1wX0");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuDdjEUiJQFx-pSEC9ij6HgG36LbUXz8FFbqCoXZGUkdcFTbh4N5gaySzxCrmSkpV9wVh1510M6cBwo5OnT066woRa3DEWkFr-pjhOTeSzt4RA1Oct0H2eUBUHVd5fc0JzGwzJ2jWLmohqC_SU2ZERWl1zmqdFa068qfrobignTXaGPWRQ4wDdupMj4wBZawHoDiXM-MzBkssPWFBxPGWP946I0yFSfOq8TUnp429UG0Cbtz9Iimb7elYtqPJxwuGDkDWAZx0468lHk">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDdjEUiJQFx-pSEC9ij6HgG36LbUXz8FFbqCoXZGUkdcFTbh4N5gaySzxCrmSkpV9wVh1510M6cBwo5OnT066woRa3DEWkFr-pjhOTeSzt4RA1Oct0H2eUBUHVd5fc0JzGwzJ2jWLmohqC_SU2ZERWl1zmqdFa068qfrobignTXaGPWRQ4wDdupMj4wBZawHoDiXM-MzBkssPWFBxPGWP946I0yFSfOq8TUnp429UG0Cbtz9Iimb7elYtqPJxwuGDkDWAZx0468lHk");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="upper" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuBwcgq4s0uytql83BFLVR1aFjVWW7kcKd5UrxSR9NUEWBthRj0og5SW44sFTr56IJHups1ox3JbPWhewTzJTRtW7ysPPlIbj5xpgCxJskuHHVRVtn0XyMFis4sI0T_3N13kt6OypQFecgd84w6vsST17Qv0rtODopSQZ_ptRMLZAet4Am30xkDew0jk_xgUwZ4kaQ2j0jT9lctCmPCZ5CCfXe7sH150KOTzuvDGTAwizj0aq3BSequQZCYlEAh_vgwHpfV8bhruJ9k">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBwcgq4s0uytql83BFLVR1aFjVWW7kcKd5UrxSR9NUEWBthRj0og5SW44sFTr56IJHups1ox3JbPWhewTzJTRtW7ysPPlIbj5xpgCxJskuHHVRVtn0XyMFis4sI0T_3N13kt6OypQFecgd84w6vsST17Qv0rtODopSQZ_ptRMLZAet4Am30xkDew0jk_xgUwZ4kaQ2j0jT9lctCmPCZ5CCfXe7sH150KOTzuvDGTAwizj0aq3BSequQZCYlEAh_vgwHpfV8bhruJ9k");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+</div>
+<input id="selectedUpperApparel" name="selected_upper_apparel" type="hidden"/>
+</section>
+<section class="mb-10" id="lower-apparel-section">
+<h2 class="text-[var(--text-primary)] text-2xl font-bold leading-tight tracking-tight px-4 pb-4 pt-2 border-b border-[var(--border-color)] mb-6">Select Lower Apparel</h2>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuAr80IF2f4jkH5afJ7pOqI_hPld2h9hcvsJMmYRGBA6fFk04ZmL2FN_L9U4VYVfwzEgo2_A8cLomYkMqe_to2T7ag2yu0R0TCFA6skaZo0_FnMpxS1XUthk-0cX4D5HZS01uagyFrSQUh99GmV0icRrQIm4VWFlKCSBiNELasEgRfiZiYmkoeuF2QIsv5rBgvYXGrQ-pPG5q9lScwiZJXBvfYLAcpgQ_16AAWgL5G2p5N8yiJGbqTaS3xO46IoVkRRbBsLZGH4NVEY">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAr80IF2f4jkH5afJ7pOqI_hPld2h9hcvsJMmYRGBA6fFk04ZmL2FN_L9U4VYVfwzEgo2_A8cLomYkMqe_to2T7ag2yu0R0TCFA6skaZo0_FnMpxS1XUthk-0cX4D5HZS01uagyFrSQUh99GmV0icRrQIm4VWFlKCSBiNELasEgRfiZiYmkoeuF2QIsv5rBgvYXGrQ-pPG5q9lScwiZJXBvfYLAcpgQ_16AAWgL5G2p5N8yiJGbqTaS3xO46IoVkRRbBsLZGH4NVEY");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuC1PEWdFRIIWeD84vIm6ZciR11B2dAxwBgpXDh5EyHle0bIziWyTLG_jLZ8NndP_JWVxOk_rxgMC-BbjAAiedDOjKtpAs7OJTWTVPiKDylktnIMP2gujWYE47o7mTGqY7PWqF-b2kXd5NvpBJQApH5DNJI9ou_g_kzWS3NfPIZ-yW4yWIjt4zOv_ptowXMw8xh5P5YUYCcuuOxQeK-NSM3va18EPn28-jcuaA2aSVGkC2CuFqRmJr7tX0nlunrPb7AY2cEcxo2d0AY">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC1PEWdFRIIWeD84vIm6ZciR11B2dAxwBgpXDh5EyHle0bIziWyTLG_jLZ8NndP_JWVxOk_rxgMC-BbjAAiedDOjKtpAs7OJTWTVPiKDylktnIMP2gujWYE47o7mTGqY7PWqF-b2kXd5NvpBJQApH5DNJI9ou_g_kzWS3NfPIZ-yW4yWIjt4zOv_ptowXMw8xh5P5YUYCcuuOxQeK-NSM3va18EPn28-jcuaA2aSVGkC2CuFqRmJr7tX0nlunrPb7AY2cEcxo2d0AY");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuB65UpGVqIDFnwRBuhbcNMx5nWUt65FVkYyH2OragLNBwaMFgo6l_WnTSeTTbgvASilmz0NTy6uxY2rpcBX-e8LYSx5DcNh5i2AfgUqGoSLTaiJl1ZZuuke39Vfn6xAppXYu98-8gi5M1XUdvVt1AOL12zsHsTKT63z6gSNKHLqkTyhtOGTVn7HScycy8sFisjqGQ9Tv9VYAfTcrb_TowLK-wrt-VKJiygs6YxB1YkBQ_UBU3QHvalrXauTSFyMhnQGhqmQfFeQq6A">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB65UpGVqIDFnwRBuhbcNMx5nWUt65FVkYyH2OragLNBwaMFgo6l_WnTSeTTbgvASilmz0NTy6uxY2rpcBX-e8LYSx5DcNh5i2AfgUqGoSLTaiJl1ZZuuke39Vfn6xAppXYu98-8gi5M1XUdvVt1AOL12zsHsTKT63z6gSNKHLqkTyhtOGTVn7HScycy8sFisjqGQ9Tv9VYAfTcrb_TowLK-wrt-VKJiygs6YxB1YkBQ_UBU3QHvalrXauTSFyMhnQGhqmQfFeQq6A");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuAaBS9uaWYOiti1fNjIy6y6CoiCwfQ4YY1Wy5NZr-42SMNutwLgyIbogWB1dNQPMYy8rNxh0wrQdT-MC5texaq_5i29fpkcYGoRumB1DnjS_8VADwPTyn1s4BSJIvXql6T6HBtu50gZLDUd1swHXgFELvSVDEEQwEV-CZe6-ldtiWylY7e72-pLlQ_LChNE9EkvcRP9a85DBHsIS52aYUAhwMZS6GpmjLgmqwMe8_AGhwvEjgln49CBAhGWJX0wGe3CZr3hec7tPMk">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAaBS9uaWYOiti1fNjIy6y6CoiCwfQ4YY1Wy5NZr-42SMNutwLgyIbogWB1dNQPMYy8rNxh0wrQdT-MC5texaq_5i29fpkcYGoRumB1DnjS_8VADwPTyn1s4BSJIvXql6T6HBtu50gZLDUd1swHXgFELvSVDEEQwEV-CZe6-ldtiWylY7e72-pLlQ_LChNE9EkvcRP9a85DBHsIS52aYUAhwMZS6GpmjLgmqwMe8_AGhwvEjgln49CBAhGWJX0wGe3CZr3hec7tPMk");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuDdjEUiJQFx-pSEC9ij6HgG36LbUXz8FFbqCoXZGUkdcFTbh4N5gaySzxCrmSkpV9wVh1510M6cBwo5OnT066woRa3DEWkFr-pjhOTeSzt4RA1Oct0H2eUBUHVd5fc0JzGwzJ2jWLmohqC_SU2ZERWl1zmqdFa068qfrobignTXaGPWRQ4wDdupMj4wBZawHoDiXM-MzBkssPWFBxPGWP946I0yFSfOq8TUnp429UG0Cbtz9Iimb7elYtqPJxwuGDkDWAZx0468lHk">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDdjEUiJQFx-pSEC9ij6HgG36LbUXz8FFbqCoXZGUkdcFTbh4N5gaySzxCrmSkpV9wVh1510M6cBwo5OnT066woRa3DEWkFr-pjhOTeSzt4RA1Oct0H2eUBUHVd5fc0JzGwzJ2jWLmohqC_SU2ZERWl1zmqdFa068qfrobignTXaGPWRQ4wDdupMj4wBZawHoDiXM-MzBkssPWFBxPGWP946I0yFSfOq8TUnp429UG0Cbtz9Iimb7elYtqPJxwuGDkDWAZx0468lHk");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuCB14PNFdqH0KoTTP29qZwLmn146zcxRE-MnAn9nU8i1b-TfMgEpwYKnU6cyRvYWDVlW8WqYH_m5T1-AE7FL3nHmqsOrNqGZ8XSAKWX4_NWHwng-27XWVXfIfxPO3NTtZP9LiRW_X04f5JaLURo0O1tow74TuK9NhSsh-oYlt6K576Fr8Fe6iVyQoYQGwt-QAWbESk8U_WE2Y2QFlMM7dyt7ZIhiiVXv53ec_0zKsyKh7FePRmQ8xgJrenxpZl1etq6-OtB7eIyBe4">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCB14PNFdqH0KoTTP29qZwLmn146zcxRE-MnAn9nU8i1b-TfMgEpwYKnU6cyRvYWDVlW8WqYH_m5T1-AE7FL3nHmqsOrNqGZ8XSAKWX4_NWHwng-27XWVXfIfxPO3NTtZP9LiRW_X04f5JaLURo0O1tow74TuK9NhSsh-oYlt6K576Fr8Fe6iVyQoYQGwt-QAWbESk8U_WE2Y2QFlMM7dyt7ZIhiiVXv53ec_0zKsyKh7FePRmQ8xgJrenxpZl1etq6-OtB7eIyBe4");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuDN7rA6ie4BdoPC9QJe7nsh9nM961ktgoa6aSBHTxV1kb62Gk_MO2wDD0j0HZbXF73s_Z4E7lg1DVs-B5yOIdJgGc7jh-5NSCizgvpEfdus_j1nfuEMUBGieWEunXAYqneG-Xjs-5leqv2wXSPLvWyrgHFP0J0pzl371sv8ok7jpaNceAAvN_8olwm7jECqp7Dd434M1wl9FvlMg_I8-OhIeoEwIRNPkPvGDbEe5RfGI89gZu6BhsfpzHOZHDy4AbLbkSFS6S6xZFo">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDN7rA6ie4BdoPC9QJe7nsh9nM961ktgoa6aSBHTxV1kb62Gk_MO2wDD0j0HZbXF73s_Z4E7lg1DVs-B5yOIdJgGc7jh-5NSCizgvpEfdus_j1nfuEMUBGieWEunXAYqneG-Xjs-5leqv2wXSPLvWyrgHFP0J0pzl371sv8ok7jpaNceAAvN_8olwm7jECqp7Dd434M1wl9FvlMg_I8-OhIeoEwIRNPkPvGDbEe5RfGI89gZu6BhsfpzHOZHDy4AbLbkSFS6S6xZFo");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuBBRxPkWnoLIgHKWzMBoamhYsjVbPEd7cfAXOihAoOZh5eJtXaU2R8dN1qyLNcS65Hkbu9w8KsUjYdYcX4bgJYlJ87ancIHLjzvINzescXLzC8L5CTq_Jn0m9bGxtOamD6zmHnz8GX6bcuELeNto5W6yLhHM5EpUCc1HlzAAqs5JC4fdsETCGtaG1io5LhWK_2_VLWE21GBrXkVSPTAcvrv14qX2b2iNdca2Mawrh3F3eqQeBno2eJfUk6DOZtlxYJmcO7FgPrcaG4">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBBRxPkWnoLIgHKWzMBoamhYsjVbPEd7cfAXOihAoOZh5eJtXaU2R8dN1qyLNcS65Hkbu9w8KsUjYdYcX4bgJYlJ87ancIHLjzvINzescXLzC8L5CTq_Jn0m9bGxtOamD6zmHnz8GX6bcuELeNto5W6yLhHM5EpUCc1HlzAAqs5JC4fdsETCGtaG1io5LhWK_2_VLWE21GBrXkVSPTAcvrv14qX2b2iNdca2Mawrh3F3eqQeBno2eJfUk6DOZtlxYJmcO7FgPrcaG4");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+<div class="preset-image-container group" data-apparel-type="lower" data-image-url="https://lh3.googleusercontent.com/aida-public/AB6AXuCM5RBbasdgCzNoEAX6cJaYvAZMCN885f4E-urvdQUjYzFZ5rv9OuU7jxH_rFwR4ZcBlSLbXvRPakvJFYH17XScPEyPzRUOTADKYDJQsTzEQZ4MHfWlTI-Y5Tkfc9boXNzQV6hBqfM2_AtYXClXgCBWqIu1z80jrxKI2U7HRwMtu7gqpbE8mQ8XdZfowQdk9QBFlmMvoyjmHjT1hTV7aqZkQjgzaVjB5ac67LO5I3EFVvvOmJQ6whiU2fIeE1M3i2TJQ823RNe1wX0">
+<div class="w-full bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-lg border border-[var(--border-color)] group-hover:border-[var(--primary-color)] transition-all duration-200" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCM5RBbasdgCzNoEAX6cJaYvAZMCN885f4E-urvdQUjYzFZ5rv9OuU7jxH_rFwR4ZcBlSLbXvRPakvJFYH17XScPEyPzRUOTADKYDJQsTzEQZ4MHfWlTI-Y5Tkfc9boXNzQV6hBqfM2_AtYXClXgCBWqIu1z80jrxKI2U7HRwMtu7gqpbE8mQ8XdZfowQdk9QBFlmMvoyjmHjT1hTV7aqZkQjgzaVjB5ac67LO5I3EFVvvOmJQ6whiU2fIeE1M3i2TJQ823RNe1wX0");'></div>
+<div class="preset-image-overlay">
+<svg class="preset-image-check size-8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+</div>
+<input id="selectedLowerApparel" name="selected_lower_apparel" type="hidden"/>
+</section>
+<section class="mb-10">
+<h2 class="text-[var(--text-primary)] text-2xl font-bold leading-tight tracking-tight px-4 pb-4 pt-2 border-b border-[var(--border-color)] mb-6">Upload Model Image</h2>
+<div class="flex flex-col p-4">
+<label class="flex flex-col items-center gap-6 rounded-xl border-2 border-dashed border-[var(--accent-color)] hover:border-[var(--primary-color)] cursor-pointer px-6 py-14 transition-colors duration-200 bg-[var(--accent-color)] bg-opacity-20 hover:bg-opacity-40" for="model-image-upload">
+<svg class="text-[var(--primary-color)] size-16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<div class="flex flex-col items-center gap-1">
+<p class="text-[var(--text-primary)] text-lg font-semibold">Drag &amp; drop or <span class="text-[var(--primary-color)]">click to upload</span></p>
+<p class="text-[var(--text-secondary)] text-sm font-normal text-center">Upload a clear image of the person for the virtual try-on.</p>
+</div>
+<input accept="image/*" class="hidden" id="model-image-upload" name="model_image" type="file"/>
+<span class="inline-flex items-center justify-center rounded-lg h-10 px-5 bg-[var(--accent-color)] text-[var(--text-primary)] text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-colors" id="model-image-filename">
+                  Select File
+                </span>
+</label>
+</div>
+</section>
+<div class="flex px-4 py-6 justify-center">
+<button class="flex min-w-[120px] max-w-[480px] w-full sm:w-auto cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-[var(--primary-color)] text-white text-base font-bold leading-normal tracking-[0.015em] hover:opacity-90 transition-opacity" type="submit">
+<span class="truncate">Submit &amp; Try On</span>
+</button>
+</div>
+</form>
+</main>
+<footer class="text-center py-6 border-t border-[var(--border-color)]">
+<p class="text-[var(--text-secondary)] text-sm">© 2024 Virtual Try-On. All rights reserved.</p>
+</footer>
+</div>
+</div>
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="display:none;position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;background:rgba(16,26,35,0.95);color:#fff;align-items:center;justify-content:center;flex-direction:column;" class="flex">
+  <svg class="animate-spin mb-4" width="64" height="64" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="#3d98f4" stroke-width="4"></circle><path class="opacity-75" fill="#3d98f4" d="M4 12a8 8 0 018-8v8z"></path></svg>
+  <span class="text-xl font-bold">Processing... Please wait</span>
+</div>
+<!-- Result image display -->
+<div id="resultContainer" style="display:none;position:fixed;z-index:10000;top:0;left:0;width:100vw;height:100vh;background:rgba(16,26,35,0.98);color:#fff;align-items:center;justify-center;flex-direction:column;" class="flex flex-col items-center justify-center">
+  <span class="text-xl font-bold mb-4">Your Virtual Try-On Result</span>
+  <img id="resultImage" src="" alt="Result" class="rounded-lg shadow-lg max-w-[90vw] max-h-[70vh] border-4 border-[var(--primary-color)]"/>
+  <button onclick="document.getElementById('resultContainer').style.display='none';" class="mt-8 px-6 py-2 rounded-lg bg-[var(--primary-color)] text-white font-bold hover:opacity-90 transition-opacity">Close</button>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const presetImages = document.querySelectorAll('.preset-image-container');
+      const selectedUpperApparelInput = document.getElementById('selectedUpperApparel');
+      const selectedLowerApparelInput = document.getElementById('selectedLowerApparel');
+      const modelImageInput = document.getElementById('model-image-upload');
+      const modelImageFilenameSpan = document.getElementById('model-image-filename');
+      const tryOnForm = document.getElementById('tryOnForm');
+      presetImages.forEach(container => {
+        container.addEventListener('click', () => {
+          const apparelType = container.dataset.apparelType;
+          const imageUrl = container.dataset.imageUrl;
+          const section = container.closest('section');
+          if (section) {
 
-    // AJAX form submission with loading overlay
-    document.getElementById('tryon-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const form = e.target;
-        const overlay = document.getElementById('loading-overlay');
-        overlay.style.display = 'flex';
-        const formData = new FormData(form);
-        fetch(form.action, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.text())
-        .then(html => {
-            overlay.style.display = 'none';
-            // Replace the container with the new HTML (result)
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const newContainer = doc.querySelector('.container');
-            document.querySelector('.container').replaceWith(newContainer);
-        })
-        .catch(err => {
-            overlay.style.display = 'none';
-            alert('An error occurred while processing.');
+            section.querySelectorAll('.preset-image-container.selected').forEach(selectedContainer => {
+              if (selectedContainer !== container) {
+                selectedContainer.classList.remove('selected');
+              }
+            });
+          }
+          container.classList.toggle('selected');
+          if (container.classList.contains('selected')) {
+            if (apparelType === 'upper') {
+              selectedUpperApparelInput.value = imageUrl;
+            } else if (apparelType === 'lower') {
+              selectedLowerApparelInput.value = imageUrl;
+            }
+          } else {
+             if (apparelType === 'upper') {
+              selectedUpperApparelInput.value = '';
+            } else if (apparelType === 'lower') {
+              selectedLowerApparelInput.value = '';
+            }
+          }
         });
+      });
+      const uploadLabel = document.querySelector('label[for="model-image-upload"]');
+      uploadLabel.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        uploadLabel.classList.add('border-[var(--primary-color)]', 'bg-opacity-40');
+      });
+      uploadLabel.addEventListener('dragleave', () => {
+        uploadLabel.classList.remove('border-[var(--primary-color)]', 'bg-opacity-40');
+      });
+      uploadLabel.addEventListener('drop', (event) => {
+        event.preventDefault();
+        uploadLabel.classList.remove('border-[var(--primary-color)]', 'bg-opacity-40');
+        if (event.dataTransfer.files.length) {
+          modelImageInput.files = event.dataTransfer.files;
+          const fileName = event.dataTransfer.files[0].name;
+          modelImageFilenameSpan.textContent = fileName.length > 20 ? fileName.substring(0, 17) + '...' : fileName;
+        }
+      });
+      modelImageInput.addEventListener('change', () => {
+        if (modelImageInput.files.length) {
+          const fileName = modelImageInput.files[0].name;
+          modelImageFilenameSpan.textContent = fileName.length > 20 ? fileName.substring(0, 17) + '...' : fileName;
+        } else {
+          modelImageFilenameSpan.textContent = 'Select File';
+        }
+      });
+      tryOnForm.addEventListener('submit', async (event) => {
+        event.preventDefault(); // Prevent default form submission
+        const formData = new FormData();
+        formData.append('selected_upper_apparel', selectedUpperApparelInput.value);
+        formData.append('selected_lower_apparel', selectedLowerApparelInput.value);
+        if (modelImageInput.files.length > 0) {
+            formData.append('model_image', modelImageInput.files[0]);
+        } else {
+            alert('Please upload a model image.');
+            return;
+        }
+        if (!selectedUpperApparelInput.value && !selectedLowerApparelInput.value) {
+            alert('Please select at least one apparel item.');
+            return;
+        }
+        // Show loading overlay
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        try {
+            const response = await fetch('/process', {
+                method: 'POST',
+                body: formData,
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.result_url) {
+                    // Hide loading, show result
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    document.getElementById('resultImage').src = result.result_url;
+                    document.getElementById('resultContainer').style.display = 'flex';
+                    // Optionally reset form
+                    // tryOnForm.reset();
+                    // modelImageFilenameSpan.textContent = 'Select File';
+                    // document.querySelectorAll('.preset-image-container.selected').forEach(c => c.classList.remove('selected'));
+                    // selectedUpperApparelInput.value = '';
+                    // selectedLowerApparelInput.value = '';
+                } else if (result.error) {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    alert(result.error);
+                }
+            } else {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                alert('There was an error submitting your request. Please try again.');
+            }
+        } catch (error) {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            alert('An unexpected error occurred. Please try again.');
+        }
+      });
     });
-    </script>
-</body>
-</html>
+  </script>
+
+</body></html>

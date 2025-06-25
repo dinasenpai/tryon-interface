@@ -1,7 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
+from flask import Flask, render_template, request, send_from_directory, jsonify
 import os
 from werkzeug.utils import secure_filename
-from stable_foocus_module import stableFoocus, stableFoocusOnlyhalf
+from stable_foocus_module import stableFoocus
 import time
 
 app = Flask(__name__)
@@ -19,44 +19,40 @@ def home():
 
 @app.route('/process', methods=['POST'])
 def process():
-    upper = request.files.get('upper')
-    lower = request.files.get('lower')
-    model = request.files.get('model')
+    # Accept both preset image URLs and file uploads
+    upper_url = request.form.get('selected_upper_apparel')
+    lower_url = request.form.get('selected_lower_apparel')
+    model = request.files.get('model_image')
     if not model:
-        flash('Please upload a model image.')
-        return redirect(url_for('home'))
+        return jsonify({'error': 'Please upload a model image.'}), 400
 
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     timestamp = int(time.time())
     model_filename = f"model_{timestamp}_" + secure_filename(model.filename)
     model_path = os.path.join(app.config['UPLOAD_FOLDER'], model_filename)
     model.save(model_path)
 
-    upper_path = lower_path = None
-    if upper and upper.filename:
-        upper_filename = f"upper_{timestamp}_" + secure_filename(upper.filename)
-        upper_path = os.path.join(app.config['UPLOAD_FOLDER'], upper_filename)
-        upper.save(upper_path)
-    if lower and lower.filename:
-        lower_filename = f"lower_{timestamp}_" + secure_filename(lower.filename)
-        lower_path = os.path.join(app.config['UPLOAD_FOLDER'], lower_filename)
-        lower.save(lower_path)
+    # Download preset images if URLs are provided, else None
+    def download_image(url, prefix):
+        import requests
+        from urllib.parse import urlparse
+        ext = os.path.splitext(urlparse(url).path)[1] or '.jpg'
+        filename = f"{prefix}_{timestamp}{ext}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        r = requests.get(url)
+        with open(filepath, 'wb') as f:
+            f.write(r.content)
+        return filepath
+
+    upper_path = download_image(upper_url, "upper") if upper_url else None
+    lower_path = download_image(lower_url, "lower") if lower_url else None
 
     try:
-        if upper_path and lower_path:
-            result_url = stableFoocus(model_path, upper_path, lower_path)
-        elif upper_path:
-            result_url = stableFoocusOnlyhalf(model_path, upper_path)
-        elif lower_path:
-            result_url = stableFoocusOnlyhalf(model_path, lower_path)
-        else:
-            flash('Please upload at least one upper or lower cloth image.')
-            return redirect(url_for('home'))
+        # Always use stableFoocus(model_path, upper_path, lower_path)
+        result_url = stableFoocus(model_path, upper_path, lower_path)
     except Exception as e:
-        flash(f'Processing failed: {e}')
-        return redirect(url_for('home'))
+        return jsonify({'error': f'Processing failed: {e}'}), 500
 
-    return render_template('index.html', result_url=result_url)
+    return jsonify({'result_url': result_url})
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
